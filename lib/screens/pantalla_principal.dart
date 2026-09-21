@@ -37,7 +37,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   // Empieza como lista vacía para que la pantalla pueda dibujarse de inmediato.
   List<Carga> _cargas = [];
 
-  // Formateador de fecha: convierte DateTime -> "24/08/2026"
+  // Formateador de fecha: convierte DateTime -> "24/08/2026".
   final DateFormat _formatoFecha = DateFormat('dd/MM/yyyy');
 
   // --------------------------------------------------------------------------
@@ -51,11 +51,20 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
   /// Lee todas las cargas desde la base de datos local y refresca la pantalla.
   Future<void> _cargarCargas() async {
-    final cargas = await _bd.obtenerCargas();
-    // Envuelto en setState para que la lista en pantalla se redibuje.
-    setState(() {
-      _cargas = cargas;
-    });
+    try {
+      final cargas = await _bd.obtenerCargas();
+      if (mounted) {
+        setState(() {
+          _cargas = cargas;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar historial de gasolina: $e')),
+        );
+      }
+    }
   }
 
   /// Borra una carga después de pedir confirmación al usuario.

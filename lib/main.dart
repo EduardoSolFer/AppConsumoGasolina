@@ -5,12 +5,28 @@
 // En Flutter, main() casi siempre hace lo mismo: lanzar tu widget raíz
 // con runApp().
 
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart'; // para DateFormat en español
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-// Importamos nuestras propias pantallas (los archivos que creamos).
-import 'screens/pantalla_principal.dart';
+import 'screens/pantalla_contenedor.dart';
 
-void main() {
+void main() async {
+  //WidgetsFlutterBinding.ensureInitialized() es OBLIGATORIO antes de llamar
+  //cualquier código async dentro de main(). Sin esto, Flutter se queja.
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializa SQLite para escritorio (Windows, Linux, macOS)
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
+  // Inicializa los datos de formato de fecha para el idioma español.
+  await initializeDateFormatting('es', null);
+
   runApp(const MiAppGasolina());
 }
 
@@ -27,7 +43,7 @@ class MiAppGasolina extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       // Título que muestra el sistema operativo en el multitasking.
-      title: 'Control de Gasolina',
+      title: 'Control de Gasolina y Mantenimiento',
 
       // Quita el cartelito "DEBUG" rojo de la esquina.
       debugShowCheckedModeBanner: false,
@@ -40,7 +56,8 @@ class MiAppGasolina extends StatelessWidget {
       ),
 
       // La primera pantalla que se ve al abrir la app.
-      home: const PantallaPrincipal(),
+      home: const PantallaContenedor(),
     );
   }
 }
+

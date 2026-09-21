@@ -80,11 +80,24 @@ class Carga {
 
   /// Toma este objeto y lo convierte en un Mapa (como JSON) para guardarlo.
   factory Carga.fromMap(Map<String, dynamic> map) {
+    // DateTime.parse puede fallar si el texto no es ISO8601 válido.
+    // Usamos DateTime.tryParse con fallback a "ahora" para que la app no crashee.
+    DateTime fecha;
+    final String? fechaRaw = map['fecha'] as String?;
+    // ignore: avoid_print
+    print('  [BD] fecha raw = "$fechaRaw"');
+
+    // DateTime.tryParse regresa null en vez de lanzar excepción si el
+    // formato no es válido. Así evitamos que la app crashee por datos corruptos.
+    if (fechaRaw != null && fechaRaw.isNotEmpty) {
+      fecha = DateTime.tryParse(fechaRaw) ?? DateTime.now();
+    } else {
+      fecha = DateTime.now(); // fallback si la fecha es null o vacía
+    }
+
     return Carga(
       id: map['id'] as int?,
-      // La fecha se guarda como texto ISO8601 ("2026-08-24T00:00:00.000")
-      // y aquí la volvemos a convertir a DateTime.
-      fecha: DateTime.parse(map['fecha'] as String),
+      fecha: fecha,
       kilometraje: (map['kilometraje'] as num).toDouble(),
       litros: (map['litros'] as num).toDouble(),
       costoTotal: (map['costo_total'] as num).toDouble(),
