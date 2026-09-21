@@ -63,6 +63,7 @@ class _FormularioCargaState extends State<FormularioCarga> {
   // ¿Estamos en modo edición?
   bool get _esEdicion => widget.cargaEditar != null;
 
+  // Formateador de fecha estándar.
   final DateFormat _formatoFecha = DateFormat('dd/MM/yyyy');
 
   // --------------------------------------------------------------------------
@@ -107,7 +108,7 @@ class _FormularioCargaState extends State<FormularioCarga> {
     final errorBasico = _validarNumeroObligatorio(valor);
     if (errorBasico != null) return errorBasico;
 
-    final numero = double.parse(valor!.replaceAll(',', '.'));
+    final numero = double.tryParse(valor!.replaceAll(',', '.')) ?? 0.0;
 
     // El odómetro nunca puede ser menor o igual al registro anterior.
     final anterior = widget.ultimaCarga;
@@ -147,33 +148,47 @@ class _FormularioCargaState extends State<FormularioCarga> {
     // validate() revisa TODOS los campos a la vez usando sus validators.
     if (!_llaveFormulario.currentState!.validate()) return;
 
-    final double km = double.parse(_controlKilometraje.text.replaceAll(',', '.'));
-    final double litros = double.parse(_controlLitros.text.replaceAll(',', '.'));
-    final double costo = double.parse(_controlCosto.text.replaceAll(',', '.'));
+    try {
+      final double km =
+          double.tryParse(_controlKilometraje.text.replaceAll(',', '.')) ?? 0.0;
+      final double litros =
+          double.tryParse(_controlLitros.text.replaceAll(',', '.')) ?? 0.0;
+      final double costo =
+          double.tryParse(_controlCosto.text.replaceAll(',', '.')) ?? 0.0;
 
-    if (_esEdicion) {
-      // MODO EDICIÓN: creamos un Carga con el MISMO id (para que reemplace).
-      final editada = Carga(
-        id: widget.cargaEditar!.id,
-        fecha: _fecha,
-        kilometraje: km,
-        litros: litros,
-        costoTotal: costo,
-      );
-      await DatabaseHelper().actualizarCarga(editada);
-    } else {
-      // MODO NUEVO: insertamos una carga completamente nueva.
-      final nueva = Carga(
-        fecha: _fecha,
-        kilometraje: km,
-        litros: litros,
-        costoTotal: costo,
-      );
-      await DatabaseHelper().insertarCarga(nueva);
+      if (_esEdicion) {
+        // MODO EDICIÓN: creamos un Carga con el MISMO id (para que reemplace).
+        final editada = Carga(
+          id: widget.cargaEditar!.id,
+          fecha: _fecha,
+          kilometraje: km,
+          litros: litros,
+          costoTotal: costo,
+        );
+        await DatabaseHelper().actualizarCarga(editada);
+      } else {
+        // MODO NUEVO: insertamos una carga completamente nueva.
+        final nueva = Carga(
+          fecha: _fecha,
+          kilometraje: km,
+          litros: litros,
+          costoTotal: costo,
+        );
+        await DatabaseHelper().insertarCarga(nueva);
+      }
+
+      // mounted: verifica que la pantalla siga viva antes de operar sobre ella.
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar la carga: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-
-    // mounted: verifica que la pantalla siga viva antes de operar sobre ella.
-    if (mounted) Navigator.pop(context, true);
   }
 
   // Calendario nativo para elegir fecha.

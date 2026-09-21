@@ -10,7 +10,9 @@ Este archivo de contexto documenta la arquitectura completa, historial de revisi
 * **Tecnología**: Flutter (Dart ^3.11.4 / SDK ^3.41.6)
 * **Plataformas Soportadas**: Android (Móvil) y Windows (Escritorio).
 * **Almacenamiento**: SQLite Local (100% Offline, sin requerir internet).
-* **Rama Git Actual**: `issues`
+* **Ramas Git**: 
+  * `issues` (Rama principal con el desarrollo completo del menú de mantenimiento, artículos y gasolina).
+  * `respaldo-mantenimiento` (Rama anterior donde se desarrolló la función).
 * **Última Actualización**: 21 de Septiembre, 2026.
 
 ---

@@ -13,11 +13,11 @@
 /// Así evitamos abrir la base de datos varias veces (lo cual da errores).
 library;
 
-import 'dart:io'; // Nos deja preguntar el sistema operativo (Platform.isWindows)
-
+import 'package:flutter/foundation.dart'; // para debugPrint
 import 'package:path/path.dart'; // Une rutas de carpetas sin errores
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // API de SQLite + soporte PC
 
+import '../models/articulo_mantenimiento.dart';
 import '../models/carga.dart';
 
 class DatabaseHelper {
@@ -41,61 +41,42 @@ class DatabaseHelper {
   // CONEXIÓN A LA BASE DE DATOS
   // --------------------------------------------------------------------------
 
-  /// Referencia a la base de datos abierta. Se crea la primera vez que se usa.
-  static Database? _baseDeDatos;
-
   /// Nombre del archivo físico donde viven tus datos.
   static const String _nombreBD = 'control_gasolina.db';
 
-  /// Versión del esquema. Si algún día cambias las tablas (agregas columnas),
-  /// sube este número a 2, 3... y Flutter ejecutará onUpgrade.
-  static const int _version = 1;
+  /// Versión del esquema. Incrementada a 2 para soportar la tabla de mantenimientos.
+  static const int _version = 2;
 
-  /// Abre (o crea) la base de datos. Es async porque leer el disco toma tiempo.
-  Future<Database> get baseDeDatos async {
-    // Solo la primera vez hace TODO el trabajo; las siguientes veces
-    // simplemente devuelve la conexión ya abierta.
-    _baseDeDatos ??= await _abrirBaseDeDatos();
-    return _baseDeDatos!;
+  /// Future estático de inicialización para prevenir aperturas concurrentes múltiples.
+  static Future<Database>? _initFuture;
+
+  /// Abre (o crea) la base de datos. Garantizado de ejecutarse una sola vez.
+  Future<Database> get baseDeDatos {
+    _initFuture ??= _abrirBaseDeDatos();
+    return _initFuture!;
   }
 
   Future<Database> _abrirBaseDeDatos() async {
-    // --- Paso 1: en PC (Windows) hay que activar el "motor" FFI ---
-    if (Platform.isWindows || Platform.isLinux) {
-      sqfliteFfiInit(); // inicializa la librería nativa de SQLite para escritorio
-      databaseFactory = databaseFactoryFfi; // le dice a sqflite qué motor usar
-    }
-
-    // --- Paso 2: consigue la carpeta donde la app SÍ puede guardar archivos.
-    //     Cada app tiene su carpeta privada (nadie más la lee).
     final String carpeta = await getDatabasesPath();
-
-    // --- Paso 3: arma la ruta completa, ej: /data/.../databases/control_gasolina.db
     final String ruta = join(carpeta, _nombreBD);
 
-    // Muestra la ruta de la BD en la consola de Flutter (solo en modo debug).
-    // La verás al ejecutar: flutter run
-    // Útil para saber dónde vive el archivo en tu celular o PC.
-    // ignore: avoid_print
-    print('┌──────────────────────────────────────────────┐');
-    print('│  📁 Base de datos SQLite:                     │');
-    print('│  $ruta');
-    print('└──────────────────────────────────────────────┘');
+    debugPrint('┌──────────────────────────────────────────────┐');
+    debugPrint('│  📁 Base de datos SQLite:                     │');
+    debugPrint('│  $ruta');
+    debugPrint('└──────────────────────────────────────────────┘');
 
-    // --- Paso 4: abre la BD. Si el archivo no existe, ejecuta onCreate.
     return openDatabase(
       ruta,
       version: _version,
       onCreate: _crearTablas,
+      onUpgrade: _actualizarBaseDeDatos,
     );
   }
 
-  /// Se ejecuta UNA sola vez en la vida de la app (cuando se crea el archivo).
+  /// Se ejecuta UNA sola vez cuando la BD es creada por primera vez.
   Future<void> _crearTablas(Database bd, int version) async {
-    // SQL: lenguaje para hablar con bases de datos.
-    // Creamos la tabla "cargas" con una columna por cada dato de nuestro modelo.
     await bd.execute('''
-      CREATE TABLE cargas (
+      CREATE TABLE IF NOT EXISTS cargas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         fecha TEXT NOT NULL,
         kilometraje REAL NOT NULL,
@@ -103,13 +84,37 @@ class DatabaseHelper {
         costo_total REAL NOT NULL
       )
     ''');
-    // AUTOINCREMENT = la base asigna 1, 2, 3... automáticamente a cada fila.
-    // NOT NULL = ese dato es obligatorio.
-    // REAL = número con decimales. TEXT = texto.
+
+    await _crearTablaArticulos(bd);
+  }
+
+  /// Crea la tabla articulos_mantenimiento si no existe.
+  Future<void> _crearTablaArticulos(Database bd) async {
+    await bd.execute('''
+      CREATE TABLE IF NOT EXISTS articulos_mantenimiento (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        marca TEXT NOT NULL,
+        costo REAL NOT NULL,
+        fecha_colocacion TEXT NOT NULL,
+        kilometraje_colocacion REAL NOT NULL,
+        categoria TEXT NOT NULL,
+        kilometraje_vida_util REAL,
+        notas TEXT
+      )
+    ''');
+  }
+
+  /// Se ejecuta cuando la versión de la base de datos sube de v1 a v2.
+  /// Mantiene todos los datos existentes de la versión 1 sin borrar nada.
+  Future<void> _actualizarBaseDeDatos(Database bd, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _crearTablaArticulos(bd);
+    }
   }
 
   // --------------------------------------------------------------------------
-  // OPERACIONES CRUD (Create, Read, Update, Delete)
+  // OPERACIONES CRUD: CARGAS DE GASOLINA
   // --------------------------------------------------------------------------
 
   /// CREATE: guarda una carga nueva y regresa su id generado.
@@ -119,36 +124,28 @@ class DatabaseHelper {
   }
 
   /// READ: trae TODAS las cargas ordenadas por kilometraje (menor a mayor).
-  ///
-  /// ¿Por qué ordenadas así? Para calcular "km recorridos" solo necesito mirar
-  /// la fila ANTERIOR en la lista: km_usados = actual - anterior.
   Future<List<Carga>> obtenerCargas() async {
     final bd = await baseDeDatos;
-
-    // query() ejecuta un SELECT. Equivale a:
-    // SELECT * FROM cargas ORDER BY kilometraje ASC
     final List<Map<String, dynamic>> filas = await bd.query(
       'cargas',
       orderBy: 'kilometraje ASC',
     );
-
-    // Convertimos cada fila (Map) en un objeto Carga usando nuestro modelo.
     return filas.map((fila) => Carga.fromMap(fila)).toList();
   }
 
-  /// READ (uno): busca una carga por su id. Útil para editar en el futuro.
+  /// READ (uno): busca una carga por su id.
   Future<Carga?> obtenerCarga(int id) async {
     final bd = await baseDeDatos;
     final filas = await bd.query(
       'cargas',
-      where: 'id = ?', // el "?" se reemplaza de forma SEGURA por el valor
-      whereArgs: [id], // (así evitamos inyección SQL)
+      where: 'id = ?',
+      whereArgs: [id],
     );
     if (filas.isEmpty) return null;
     return Carga.fromMap(filas.first);
   }
 
-  /// UPDATE: modifica una carga existente (la identificamos por su id).
+  /// UPDATE: modifica una carga existente.
   Future<int> actualizarCarga(Carga carga) async {
     final bd = await baseDeDatos;
     return bd.update(
@@ -164,4 +161,62 @@ class DatabaseHelper {
     final bd = await baseDeDatos;
     return bd.delete('cargas', where: 'id = ?', whereArgs: [id]);
   }
+
+  /// Obtiene el kilometraje máximo registrado en las cargas de gasolina.
+  Future<double> obtenerUltimoKilometrajeGasolina() async {
+    final bd = await baseDeDatos;
+    final result = await bd.rawQuery('SELECT MAX(kilometraje) as max_km FROM cargas');
+    if (result.isNotEmpty && result.first['max_km'] != null) {
+      return (result.first['max_km'] as num).toDouble();
+    }
+    return 0.0;
+  }
+
+  // --------------------------------------------------------------------------
+  // OPERACIONES CRUD: ARTÍCULOS DE MANTENIMIENTO
+  // --------------------------------------------------------------------------
+
+  /// CREATE: Guarda un nuevo artículo de mantenimiento.
+  Future<int> insertarArticulo(ArticuloMantenimiento articulo) async {
+    final bd = await baseDeDatos;
+    return bd.insert('articulos_mantenimiento', articulo.toMap());
+  }
+
+  /// READ: Trae artículos opcionalmente filtrados por categoría.
+  Future<List<ArticuloMantenimiento>> obtenerArticulos({String? categoria}) async {
+    final bd = await baseDeDatos;
+    final List<Map<String, dynamic>> filas;
+    if (categoria != null && categoria.isNotEmpty && categoria != 'Todos') {
+      filas = await bd.query(
+        'articulos_mantenimiento',
+        where: 'categoria = ?',
+        whereArgs: [categoria],
+        orderBy: 'fecha_colocacion DESC',
+      );
+    } else {
+      filas = await bd.query(
+        'articulos_mantenimiento',
+        orderBy: 'fecha_colocacion DESC',
+      );
+    }
+    return filas.map((fila) => ArticuloMantenimiento.fromMap(fila)).toList();
+  }
+
+  /// UPDATE: Actualiza un artículo existente.
+  Future<int> actualizarArticulo(ArticuloMantenimiento articulo) async {
+    final bd = await baseDeDatos;
+    return bd.update(
+      'articulos_mantenimiento',
+      articulo.toMap(),
+      where: 'id = ?',
+      whereArgs: [articulo.id],
+    );
+  }
+
+  /// DELETE: Elimina un artículo por ID.
+  Future<int> eliminarArticulo(int id) async {
+    final bd = await baseDeDatos;
+    return bd.delete('articulos_mantenimiento', where: 'id = ?', whereArgs: [id]);
+  }
 }
+
