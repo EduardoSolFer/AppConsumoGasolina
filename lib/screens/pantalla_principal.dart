@@ -199,9 +199,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
       // FloatingActionButton = botón flotante "+" para agregar una carga.
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_gasolina',
         onPressed: _abrirFormulario,
         icon: const Icon(Icons.local_gas_station),
-        label: const Text('Nueva carga'),
+        label: const Text('Nueva Carga'),
       ),
 
       body: _cargas.isEmpty

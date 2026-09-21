@@ -183,6 +183,7 @@ class _PantallaMantenimientoState extends State<PantallaMantenimiento> {
               ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_mantenimiento',
         onPressed: () => _abrirFormulario(),
         icon: const Icon(Icons.add),
         label: const Text('Agregar Artículo'),
