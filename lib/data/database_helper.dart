@@ -70,10 +70,6 @@ class DatabaseHelper {
       version: _version,
       onCreate: _crearTablas,
       onUpgrade: _actualizarBaseDeDatos,
-      onOpen: (bd) async {
-        // Garantiza que la tabla articulos_mantenimiento siempre exista sin importar la versión
-        await _crearTablaArticulos(bd);
-      },
     );
   }
 
