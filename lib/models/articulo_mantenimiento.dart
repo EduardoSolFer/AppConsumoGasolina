@@ -68,7 +68,7 @@ class ArticuloMantenimiento {
   }
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       if (id != null) 'id': id,
       'nombre': nombre,
       'marca': marca,
@@ -76,8 +76,9 @@ class ArticuloMantenimiento {
       'fecha_colocacion': fechaColocacion.toIso8601String(),
       'kilometraje_colocacion': kilometrajeColocacion,
       'categoria': categoria,
-      'kilometraje_vida_util': kilometrajeVidaUtil,
-      'notas': notas,
     };
+    if (kilometrajeVidaUtil != null) map['kilometraje_vida_util'] = kilometrajeVidaUtil;
+    if (notas != null && notas!.isNotEmpty) map['notas'] = notas;
+    return map;
   }
 }
