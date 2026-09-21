@@ -44,8 +44,8 @@ class DatabaseHelper {
   /// Nombre del archivo físico donde viven tus datos.
   static const String _nombreBD = 'control_gasolina.db';
 
-  /// Versión del esquema. Incrementada a 2 para soportar la tabla de mantenimientos.
-  static const int _version = 2;
+  /// Versión del esquema. Incrementada a 3 para forzar la creación de la tabla.
+  static const int _version = 3;
 
   /// Future estático de inicialización para prevenir aperturas concurrentes múltiples.
   static Future<Database>? _initFuture;
@@ -105,10 +105,9 @@ class DatabaseHelper {
     ''');
   }
 
-  /// Se ejecuta cuando la versión de la base de datos sube de v1 a v2.
-  /// Mantiene todos los datos existentes de la versión 1 sin borrar nada.
+  /// Se ejecuta cuando la versión de la base de datos sube de v1 o v2 a v3.
   Future<void> _actualizarBaseDeDatos(Database bd, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
+    if (oldVersion < 3) {
       await _crearTablaArticulos(bd);
     }
   }
